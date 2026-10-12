@@ -1,0 +1,141 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: patrimonial-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - patrimonial-network
+    healthcheck:
+      test: echo 'db.adminCommand("ping")' | mongosh localhost:27017
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: --replSet rs0 --bind_ip_all
+    init: true
+
+  mongodb-init:
+    image: mongo:7.0
+    container_name: patrimonial-mongodb-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - patrimonial-network
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        echo 'Waiting for MongoDB to be ready...'
+        sleep 3
+        echo 'Initializing MongoDB Replica Set...'
+        mongosh mongodb:27017 --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongodb:27017'}]})"
+
+  redis:
+    image: redis:7-alpine
+    container_name: patrimonial-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - patrimonial-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes --requirepass redispassword
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: patrimonial-kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092,PLAINTEXT_INTERNAL://kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 168
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - patrimonial-network
+    healthcheck:
+      test: kafka-broker-api-versions --bootstrap-server localhost:9092
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: patrimonial-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_INIT_LIMIT: 5
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_datalog:/var/lib/zookeeper/log
+    networks:
+      - patrimonial-network
+
+  patrimonial-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: patrimonial-api
+    ports:
+      - "8080:8080"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/patrimonial?replicaSet=rs0
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: redispassword
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_CONSUMER_GROUP: patrimonial-service
+      SERVER_PORT: 8080
+      SPRING_PROFILE: prod
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - patrimonial-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  mongodb_data:
+  mongodb_config:
+  redis_data:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_datalog:
+
+networks:
+  patrimonial-network:
+    driver: bridge
