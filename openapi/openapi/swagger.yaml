@@ -1,0 +1,444 @@
+﻿openapi: 3.0.0
+info:
+  title: API InsurancePatrimonial - Open Insurance Brasil
+  description: |
+    API de Patrimonial do Open Insurance Brasil - Fase 2.
+    Traz informações de apólice, prêmio e sinistro mantidas nas instituições transmissoras por seus clientes.
+    Não possui segregação entre pessoa natural e pessoa jurídica.
+    Requer consentimento do cliente para todos os 'endpoints'.
+  version: 2.0.0
+  contact:
+    name: Governança do Open Insurance Brasil
+    url: 'https://www.gov.br/susep/'
+servers:
+  - url: 'https://api.organizacao.com.br/open-insurance/insurance-patrimonial/v2'
+    description: Servidor de Produção
+tags:
+  - name: 'InsurancePatrimonial'
+paths:
+  /insurance-patrimonial:
+    get:
+      tags:
+        - InsurancePatrimonial
+      summary: Obtem a lista de identificação de InsurancePatrimonial
+      operationId: "getInsurancePatrimonial"
+      parameters:
+        - $ref: '#/components/parameters/Authorization'
+        - $ref: '#/components/parameters/xFapiAuthDate'
+        - $ref: '#/components/parameters/xFapiCustomerIpAddress'
+        - $ref: '#/components/parameters/xFapiInteractionId'
+        - $ref: '#/components/parameters/xCustomerUserAgent'
+        - $ref: "#/components/parameters/x-v"
+        - $ref: "#/components/parameters/x-min-v"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/pageSize"
+      responses:
+        '200':
+          $ref: '#/components/responses/OKResponseInsurancePatrimonial'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '406':
+          $ref: '#/components/responses/NotAcceptable'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      security:
+        - OpenId:
+            - openid
+          OAuth2Security:
+            - 'consent:consentId'
+            - insurance-patrimonial
+  /insurance-patrimonial/{policyId}/policy-info:
+    get:
+      tags:
+        - InsurancePatrimonial
+      summary: Obtém as informações gerais da apólice
+      operationId: "getInsurancePatrimonialpolicyIdPolicyInfo"
+      parameters:
+        - $ref: '#/components/parameters/Authorization'
+        - $ref: '#/components/parameters/xFapiAuthDate'
+        - $ref: '#/components/parameters/xFapiCustomerIpAddress'
+        - $ref: '#/components/parameters/xFapiInteractionId'
+        - $ref: '#/components/parameters/xCustomerUserAgent'
+        - $ref: "#/components/parameters/policyId"
+        - $ref: "#/components/parameters/x-v"
+        - $ref: "#/components/parameters/x-min-v"
+      responses:
+        '200':
+          $ref: '#/components/responses/OKResponseInsurancePatrimonialPolicyInfo'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - OpenId:
+            - openid
+          OAuth2Security:
+            - 'consent:consentId'
+            - insurance-patrimonial
+  /insurance-patrimonial/{policyId}/premium:
+    get:
+      tags:
+        - InsurancePatrimonial
+      summary: Obtém os dados de prêmio da apólice
+      operationId: "getInsurancePatrimonialpolicyIdPremium"
+      parameters:
+        - $ref: '#/components/parameters/Authorization'
+        - $ref: '#/components/parameters/xFapiAuthDate'
+        - $ref: '#/components/parameters/xFapiCustomerIpAddress'
+        - $ref: '#/components/parameters/xFapiInteractionId'
+        - $ref: '#/components/parameters/xCustomerUserAgent'
+        - $ref: "#/components/parameters/policyId"
+        - $ref: "#/components/parameters/x-v"
+        - $ref: "#/components/parameters/x-min-v"
+      responses:
+        '200':
+          $ref: '#/components/responses/OKResponseInsurancePatrimonialPremium'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - OpenId:
+            - openid
+          OAuth2Security:
+            - 'consent:consentId'
+            - insurance-patrimonial
+  /insurance-patrimonial/{policyId}/claim:
+    get:
+      tags:
+        - InsurancePatrimonial
+      summary: Obtém os dados de sinistro da apólice
+      operationId: "getInsurancePatrimonialpolicyIdClaims"
+      parameters:
+        - $ref: '#/components/parameters/Authorization'
+        - $ref: '#/components/parameters/xFapiAuthDate'
+        - $ref: '#/components/parameters/xFapiCustomerIpAddress'
+        - $ref: '#/components/parameters/xFapiInteractionId'
+        - $ref: '#/components/parameters/xCustomerUserAgent'
+        - $ref: "#/components/parameters/policyId"
+        - $ref: "#/components/parameters/x-v"
+        - $ref: "#/components/parameters/x-min-v"
+      responses:
+        '200':
+          $ref: '#/components/responses/OKResponseInsurancePatrimonialClaims'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - OpenId:
+            - openid
+          OAuth2Security:
+            - 'consent:consentId'
+            - insurance-patrimonial
+components:
+  parameters:
+    policyId:
+      name: policyId
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 60
+    Authorization:
+      name: Authorization
+      in: header
+      description: HTTP Authorization header
+      required: true
+      schema:
+        type: string
+        maxLength: 2048
+    xFapiAuthDate:
+      name: x-fapi-auth-date
+      in: header
+      required: false
+      schema:
+        type: string
+    xFapiCustomerIpAddress:
+      name: x-fapi-customer-ip-address
+      in: header
+      required: false
+      schema:
+        type: string
+    xFapiInteractionId:
+      name: x-fapi-interaction-id
+      in: header
+      required: true
+      schema:
+        type: string
+    xCustomerUserAgent:
+      name: x-customer-user-agent
+      in: header
+      required: false
+      schema:
+        type: string
+    page:
+      name: page
+      in: query
+      description: Page number
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    pageSize:
+      name: page-size
+      in: query
+      description: Page size
+      schema:
+        type: integer
+        default: 25
+        minimum: 1
+        maximum: 1000
+    x-v:
+      name: x-v
+      in: header
+      required: false
+      schema:
+        type: string
+    x-min-v:
+      name: x-min-v
+      in: header
+      required: false
+      schema:
+        type: string
+  schemas:
+    ResponseInsurancePatrimonial:
+      type: object
+      required:
+        - data
+        - links
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required:
+              - brand
+              - companies
+            properties:
+              brand:
+                type: string
+                maxLength: 80
+              companies:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - companyName
+                    - cnpjNumber
+                    - policies
+                  properties:
+                    companyName:
+                      type: string
+                      maxLength: 200
+                    cnpjNumber:
+                      type: string
+                      maxLength: 14
+                      pattern: '^[A-Z0-9]{12}\d{2}$'
+                    policies:
+                      type: array
+                      items:
+                        type: object
+                        required:
+                          - policyId
+                          - productName
+                        properties:
+                          policyId:
+                            type: string
+                            maxLength: 60
+                          productName:
+                            type: string
+                            maxLength: 70
+        links:
+          $ref: '#/components/schemas/Links'
+        meta:
+          $ref: '#/components/schemas/Meta'
+    Links:
+      type: object
+      properties:
+        self:
+          type: string
+        first:
+          type: string
+        prev:
+          type: string
+        next:
+          type: string
+        last:
+          type: string
+    Meta:
+      type: object
+      required:
+        - totalRecords
+        - totalPages
+      properties:
+        totalRecords:
+          type: integer
+        totalPages:
+          type: integer
+    XV:
+      type: string
+    ResponseError:
+      type: object
+      required:
+        - errors
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            required:
+              - code
+              - title
+              - detail
+              - requestDateTime
+            properties:
+              code:
+                type: string
+              title:
+                type: string
+              detail:
+                type: string
+              requestDateTime:
+                type: string
+                format: date-time
+    ResponseInsurancePatrimonialPolicyInfo:
+      type: object
+      required:
+        - data
+        - links
+        - meta
+      properties:
+        data:
+          type: object
+        links:
+          $ref: '#/components/schemas/Links'
+        meta:
+          $ref: '#/components/schemas/Meta'
+    ResponseInsurancePatrimonialPremium:
+      type: object
+      required:
+        - data
+        - links
+        - meta
+      properties:
+        data:
+          type: object
+        links:
+          $ref: '#/components/schemas/Links'
+        meta:
+          $ref: '#/components/schemas/Meta'
+    ResponseInsurancePatrimonialClaims:
+      type: object
+      required:
+        - data
+        - links
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+        links:
+          $ref: '#/components/schemas/Links'
+        meta:
+          $ref: '#/components/schemas/Meta'
+  responses:
+    OKResponseInsurancePatrimonial:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseInsurancePatrimonial'
+    OKResponseInsurancePatrimonialPolicyInfo:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseInsurancePatrimonialPolicyInfo'
+    OKResponseInsurancePatrimonialPremium:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseInsurancePatrimonialPremium'
+    OKResponseInsurancePatrimonialClaims:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseInsurancePatrimonialClaims'
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseError'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseError'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseError'
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseError'
+    MethodNotAllowed:
+      description: Method Not Allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseError'
+    NotAcceptable:
+      description: Not Acceptable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseError'
+    UnprocessableEntity:
+      description: Unprocessable Entity
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseError'
+    TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseError'
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseError'
+  securitySchemes:
+    OpenId:
+      type: openIdConnect
+      openIdConnectUrl: 'https://auth.mockbank.poc.raidiam.io/.well-known/openid-configuration'
+    OAuth2Security:
+      type: oauth2
+      description: OAuth2 flow
+      flows:
+        authorizationCode:
+          authorizationUrl: 'https://authserver.example/authorization'
+          tokenUrl: 'https://authserver.example/token'
+          scopes:
+            insurance-patrimonial: Access to insurance patrimonial API
