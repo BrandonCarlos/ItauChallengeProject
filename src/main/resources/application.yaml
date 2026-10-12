@@ -1,0 +1,74 @@
+﻿spring:
+  application:
+    name: patrimonial-api
+  profiles:
+    active: dev
+
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/patrimonial
+      auto-index-creation: true
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: patrimonial-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+
+logging:
+  level:
+    root: INFO
+    com.itau.insurance.patrimonial: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [correlationId=%X{correlationId:-}] %-5level %logger{36} - %msg%n"
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,mongo,redis,kafka
+  tracing:
+    sampling:
+      probability: 1.0
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+    tagsSorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+app:
+  idempotency:
+    enabled: true
+    ttl-minutes: 1440
+    storage: redis
+  outbox:
+    enabled: true
+    poll-interval-ms: 5000
+    batch-size: 100
