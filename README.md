@@ -89,8 +89,8 @@ The application strictly separates concerns into four layers:
 ## Technology Stack
 
 ### Core Framework
-- **Java 21** - Latest LTS version
-- **Spring Boot 3.3.5** - Enterprise application framework
+- **Java 25** - Latest LTS version
+- **Spring Boot 3.5.16** - Enterprise application framework
 - **Spring Web** - RESTful API development
 - **Spring Validation** - Bean validation (Jakarta)
 - **Spring Data MongoDB** - MongoDB persistence
@@ -119,7 +119,7 @@ The application strictly separates concerns into four layers:
 
 ### Development Environment
 
-- **Java 21 or later** (JDK)
+- **Java 25 or later** (JDK)
   ```bash
   java -version
   ```
@@ -158,12 +158,12 @@ Key environment variables:
 
 ```env
 # MongoDB
-SPRING_DATA_MONGODB_URI=mongodb://root:rootpassword@localhost:27017/patrimonial?authSource=admin&replicaSet=rs0
+SPRING_DATA_MONGODB_URI=mongodb://localhost:27017/patrimonial?replicaSet=rs0
 
 # Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=redispassword
+SPRING_DATA_REDIS_HOST=localhost
+SPRING_DATA_REDIS_PORT=6379
+SPRING_DATA_REDIS_PASSWORD=redispassword
 
 # Kafka
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
@@ -171,14 +171,14 @@ KAFKA_CONSUMER_GROUP=patrimonial-service
 
 # Application
 SERVER_PORT=8080
-SPRING_PROFILE=dev
+SPRING_PROFILES_ACTIVE=dev
 ```
 
 ### Maven Dependencies
 
 All dependencies are configured in `pom.xml`. The project uses:
 
-- Spring Boot 3.3.5 with Java 21
+- Spring Boot 3.5.16 with Java 25
 - Spring Data MongoDB for persistence
 - Spring Data Redis for idempotency
 - Spring Kafka for event streaming
@@ -189,7 +189,8 @@ All dependencies are configured in `pom.xml`. The project uses:
 ### 1. Clone Repository
 
 ```bash
-cd c:\Users\User\Downloads\wayon\wayon
+git clone https://github.com/BrandonCarlos/ItauChallengeProject.git
+cd ItauChallengeProject
 ```
 
 ### 2. Setup Local Environment
@@ -273,8 +274,9 @@ java -jar target/patrimonial-api-1.0.0.jar
 ```bash
 java -jar target/patrimonial-api-1.0.0.jar \
   --spring.data.mongodb.uri=mongodb://localhost:27017/patrimonial \
-  --spring.redis.host=localhost \
-  --kafka.bootstrap-servers=localhost:9092
+  --spring.data.redis.host=localhost \
+  --spring.data.redis.password=redispassword \
+  --spring.kafka.bootstrap-servers=localhost:9092
 ```
 
 ## Running Tests
@@ -329,7 +331,7 @@ Headers:
   - x-fapi-interaction-id: {uuid}
 Query Parameters:
   - page: 1 (default: 1)
-  - page-size: 25 (default: 25, max: 1000)
+  - page-size: 25 (default: 25)
 
 Response (200 OK):
 {
@@ -459,20 +461,22 @@ Idempotency-Key: {unique-key}
 Request:
 {
   "policyNumber": "POL2024001",
-  "productName": "Comprehensive Residential",
-  "brand": "InsurCo",
-  "companyName": "InsurCo Ltd",
-  "cnpjNumber": "12345678901234",
-  "issueDate": "2024-01-01",
+  "customerId": "CUSTOMER123",
+  "coverage": "HOME",
+  "premium": 1500,
   "startDate": "2024-01-01",
-  "endDate": "2025-01-01"
+  "endDate": "2025-01-01",
+  "propertyDescription": "Apartment in Sao Paulo",
+  "propertyAddress": "Av. Paulista, 1000"
 }
 
 Response (201 Created):
 {
-  "id": "507f1f77bcf86cd799439011",
+  "policyId": "507f1f77bcf86cd799439011",
   "policyNumber": "POL2024001",
-  "productName": "Comprehensive Residential",
+  "customerId": "CUSTOMER123",
+  "coverage": "HOME",
+  "premium": 1500,
   "status": "ACTIVE",
   "createdAt": "2024-01-01T10:00:00Z",
   "updatedAt": "2024-01-01T10:00:00Z"
@@ -486,9 +490,11 @@ GET /api/v1/policies/{policyId}
 
 Response (200 OK):
 {
-  "id": "507f1f77bcf86cd799439011",
+  "policyId": "507f1f77bcf86cd799439011",
   "policyNumber": "POL2024001",
-  "productName": "Comprehensive Residential",
+  "customerId": "CUSTOMER123",
+  "coverage": "HOME",
+  "premium": 1500,
   "status": "ACTIVE",
   "createdAt": "2024-01-01T10:00:00Z",
   "updatedAt": "2024-01-01T10:00:00Z"
@@ -506,19 +512,19 @@ Response (404 Not Found):
 ##### List Policies
 
 ```
-GET /api/v1/policies?page=0&size=20&sort=createdAt,desc
+GET /api/v1/policies?page=0&size=20&sortBy=createdAt&sortDirection=desc
 
 Response (200 OK):
 {
   "content": [
     { /* policy objects */ }
   ],
-  "pageable": {
-    "pageNumber": 0,
-    "pageSize": 20,
-    "totalElements": 100,
-    "totalPages": 5
-  }
+  "page": 0,
+  "size": 20,
+  "totalElements": 100,
+  "totalPages": 5,
+  "sortBy": "createdAt",
+  "sortDirection": "desc"
 }
 ```
 
@@ -588,7 +594,11 @@ curl -X POST http://localhost:8080/api/v1/policies \
   -H "Idempotency-Key: unique-operation-id-12345" \
   -d '{
     "policyNumber": "POL2024001",
-    "productName": "Comprehensive"
+    "customerId": "CUSTOMER123",
+    "coverage": "HOME",
+    "premium": 1500,
+    "startDate": "2024-01-01",
+    "endDate": "2025-01-01"
   }'
 ```
 
@@ -622,7 +632,7 @@ The system publishes domain events for policy lifecycle:
 
 Events are published to Kafka topics for asynchronous processing:
 
-- **Topics**: `patrimonial.policy.created`, `patrimonial.policy.updated`, `patrimonial.policy.deleted`
+- **Topics**: `policy-events` (domain lifecycle events), `domain-events` (generic domain events)
 - **Format**: JSON with schema versioning
 - **Partitioning**: By policyId for ordering guarantees per policy
 
@@ -632,7 +642,7 @@ The implementation uses the transactional outbox pattern:
 
 1. **Write Phase**: Policy change + outbox event persisted together in MongoDB transaction
 2. **Publish Phase**: Scheduled job polls outbox for unpublished events
-3. **Reliability**: Ensures events are published exactly once, even on failures
+3. **Reliability**: Ensures events are published with retry semantics (at-least-once delivery)
 
 Configuration:
 
@@ -643,7 +653,8 @@ app:
     poll-interval-ms: 5000       # Poll interval for unpublished events
     batch-size: 100              # Batch size for polling
     max-retries: 3               # Maximum retry attempts
-    retry-delay-ms: 1000         # Delay between retries
+    retry-delay-minutes: 5       # Delay before retrying failed events
+    retry-interval-ms: 60000     # Retry scan interval
 ```
 
 ### Event Consumer Example
@@ -651,10 +662,10 @@ app:
 Implement `PolicyEventConsumer` to handle events:
 
 ```java
-@KafkaListener(topics = "patrimonial.policy.created")
-public void onPolicyCreated(PolicyCreatedEvent event) {
-    // Handle policy creation event
-    log.info("Policy created: {}", event.getPolicyId());
+@KafkaListener(topics = "${app.kafka.topic.policy-events:policy-events}")
+public void consumePolicyEvent(String message) {
+    // Handle policy event payload
+    log.info("Policy event received: {}", message);
 }
 ```
 
@@ -666,8 +677,9 @@ MongoDB is configured with replica set support for transactions:
 
 ```yaml
 spring:
-  mongodb:
-    uri: mongodb://root:rootpassword@localhost:27017/patrimonial?authSource=admin&replicaSet=rs0
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/patrimonial}
 ```
 
 ### Collections
@@ -680,11 +692,12 @@ spring:
 Automatic index creation is enabled. Key indexes:
 
 ```javascript
-db.policies.createIndex({ "policyNumber": 1 }, { unique: true })
-db.policies.createIndex({ "status": 1 })
-db.policies.createIndex({ "createdAt": 1 })
-db.outbox_events.createIndex({ "status": 1, "createdAt": 1 })
-db.outbox_events.createIndex({ "createdAt": 1 }, { expireAfterSeconds: 604800 })
+db.policies.createIndex({ "policy_number": 1 }, { unique: true, sparse: true })
+db.policies.createIndex({ "idempotency_key": 1 }, { unique: true, sparse: true })
+db.policies.createIndex({ "customer_id": 1, "status": 1 })
+db.policies.createIndex({ "status": 1, "created_at": -1 })
+db.outbox_events.createIndex({ "status": 1, "created_at": -1 })
+db.outbox_events.createIndex({ "aggregate_id": 1, "status": 1 })
 ```
 
 ### Transactions
@@ -739,15 +752,17 @@ Idempotency requests are stored with:
 class IdempotencyRequest {
     String idempotencyKey;
     String requestHash;        // SHA-256 of request body
-    IdempotencyStatus status;  // PENDING, SUCCESS, FAILED
+    IdempotencyStatus status;  // PENDING, PROCESSING, COMPLETED, FAILED, EXPIRED
     String response;           // Cached response body
     LocalDateTime expiresAt;
 }
 
 enum IdempotencyStatus {
-    PENDING,    // Operation in progress
-    SUCCESS,    // Operation completed successfully
-    FAILED      // Operation failed
+    PENDING,
+    PROCESSING,
+    COMPLETED,
+    FAILED,
+    EXPIRED
 }
 ```
 
@@ -765,44 +780,19 @@ enum IdempotencyStatus {
 
 ### Authentication & Authorization
 
-The API requires OAuth2 authentication for all endpoints:
+This project currently does **not** enable Spring Security/OAuth2 resource-server validation in code.
+Open Insurance endpoints require headers for contract compatibility, but token validation should be enforced by:
 
-```
-Authorization: Bearer {access_token}
-```
+- API Gateway / WAF
+- or a dedicated Spring Security layer added to this service
 
-Headers validated:
+Headers expected by Open Insurance routes:
 
-- `Authorization` - OAuth2 Bearer token
-- `x-fapi-interaction-id` - Request correlation ID (UUID)
-- `x-fapi-auth-date` - User's last authentication date (RFC7231)
-- `x-fapi-customer-ip-address` - Client IP address
-- `x-customer-user-agent` - Client user agent
-
-### Token Validation
-
-The application validates tokens against configured OAuth2 provider:
-
-```yaml
-spring:
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${OAUTH2_ISSUER_URI}
-          jwk-set-uri: ${OAUTH2_JWK_SET_URI}
-```
-
-### Development Mode (Without OAuth2)
-
-For local development without OAuth2 setup, disable security:
-
-```yaml
-# Not recommended for production
-app:
-  security:
-    enabled: false
-```
+- `Authorization`
+- `x-fapi-interaction-id`
+- `x-fapi-auth-date` (optional)
+- `x-fapi-customer-ip-address` (optional)
+- `x-customer-user-agent` (optional)
 
 ### Best Practices
 
@@ -919,14 +909,95 @@ docker-compose -f compose.yaml logs -f patrimonial-api
 curl http://localhost:8080/actuator/health
 ```
 
+### Runtime Operations (Docker, Kafka, Redis, MongoDB)
+
+Use the commands below during local development and debugging.
+
+#### General Logs
+
+```bash
+# All services logs
+docker-compose -f compose.yaml logs -f
+
+# API logs only
+docker-compose -f compose.yaml logs -f patrimonial-api
+
+# Kafka broker logs
+docker-compose -f compose.yaml logs -f kafka
+
+# Redis logs
+docker-compose -f compose.yaml logs -f redis
+
+# MongoDB logs
+docker-compose -f compose.yaml logs -f mongodb
+```
+
+#### Kafka Servers, Topics, Producers, Consumers, and Events
+
+```bash
+# List Kafka topics
+docker exec patrimonial-kafka kafka-topics --list --bootstrap-server localhost:9092
+
+# Describe a topic (partitions, leaders, replicas, offsets metadata)
+docker exec patrimonial-kafka kafka-topics --describe --bootstrap-server localhost:9092 --topic policy-events
+
+# Read events from topic (consumer view)
+docker exec -it patrimonial-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic policy-events --property print.key=true --property print.headers=true
+
+# Read all events from beginning
+docker exec -it patrimonial-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic policy-events --from-beginning --property print.key=true --property print.headers=true
+
+# Send a manual event (producer view)
+echo "{\"event\":\"manual-test\"}" | docker exec -i patrimonial-kafka kafka-console-producer --bootstrap-server localhost:9092 --topic policy-events
+
+# Inspect consumer group state and lag
+docker exec patrimonial-kafka kafka-consumer-groups --bootstrap-server localhost:9092 --describe --group patrimonial-service
+
+# Kafka broker API connectivity check
+docker exec patrimonial-kafka kafka-broker-api-versions --bootstrap-server localhost:9092
+```
+
+#### Redis Command Line
+
+```bash
+# Open Redis CLI
+docker exec -it patrimonial-redis redis-cli -a redispassword
+
+# Monitor live Redis commands (useful for idempotency debug)
+docker exec -it patrimonial-redis redis-cli -a redispassword MONITOR
+
+# List idempotency keys
+docker exec -it patrimonial-redis redis-cli -a redispassword KEYS "idempotency:*"
+
+# Inspect value and TTL of a key
+docker exec -it patrimonial-redis redis-cli -a redispassword GET "idempotency:example-key"
+docker exec -it patrimonial-redis redis-cli -a redispassword TTL "idempotency:example-key"
+```
+
+#### MongoDB Command Line
+
+```bash
+# Open Mongo shell
+docker exec -it patrimonial-mongodb mongosh
+
+# Inside mongosh
+use patrimonial
+show collections
+db.policies.find().limit(5).pretty()
+db.outbox_events.find().sort({created_at: -1}).limit(10).pretty()
+db.policies.getIndexes()
+db.policies.find({ policy_number: "POL-3000" }).explain("executionStats")
+```
+
 ### Environment Variables
 
 Pass environment variables via `.env` file or command line:
 
 ```bash
 docker run \
-  -e SPRING_DATA_MONGODB_URI=mongodb://root:rootpassword@mongo:27017/patrimonial \
+  -e SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/patrimonial?replicaSet=rs0 \
   -e SPRING_DATA_REDIS_HOST=redis \
+  -e SPRING_DATA_REDIS_PASSWORD=redispassword \
   -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
   -p 8080:8080 \
   patrimonial-api:latest
@@ -1121,6 +1192,6 @@ For issues and questions:
 ---
 
 **Version**: 1.0.0  
-**Last Updated**: 2024-10-10  
-**Java Version**: 21  
-**Spring Boot Version**: 3.3.5
+**Last Updated**: 2026-10-12  
+**Java Version**: 25  
+**Spring Boot Version**: 3.5.16
