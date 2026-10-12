@@ -1,331 +1,207 @@
-# Itaú Insurance Patrimonial API
+# Itaú Insurance Patrimonial API — Architecture
 
 ## Overview
 
-This is a comprehensive Java application for managing Patrimonial Insurance policies for Itaú Insurance. The application follows **Clean Architecture** with **Hexagonal Architecture (Ports and Adapters)** principles, ensuring a highly maintainable, testable, and scalable codebase.
+This service is a Java 25 / Spring Boot 3.5.16 backend for policy management and Open Insurance read APIs.  
+It follows **Clean Architecture + Hexagonal Architecture (Ports & Adapters)** with event-driven integration using **Kafka + Transactional Outbox**.
 
-## Architecture
+## Runtime Stack
 
-### Clean Architecture Principles
+- Java 25
+- Spring Boot 3.5.16
+- MongoDB 7 (primary data store)
+- Redis 7 (idempotency and cache-like support)
+- Kafka 7.5 + Zookeeper (events and asynchronous processing)
+- Docker Compose for local orchestration
 
-The application is organized into clear, independent layers:
+## Architectural Layers
 
-```
-┌─────────────────────────────────────────────────────┐
-│           Entrypoint Layer (REST)                   │
-│  PolicyController, InsurancePatrimonialController   │
-└────────────────────┬────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────┐
-│         Application Layer (Use Cases)               │
-│  PolicyApplicationService, Mappers, DTOs            │
-└────────────────────┬────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────┐
-│           Domain Layer (Business Logic)             │
-│  Policy, Events, Exceptions, Ports                  │
-└────────────────────┬────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────┐
-│        Adapter Layer (Infrastructure)               │
-│  Repository Implementations, Event Publishing       │
-└─────────────────────────────────────────────────────┘
+```text
+Entrypoint (REST Controllers)
+        |
+Application (Use Cases / Orchestration)
+        |
+Domain (Business Rules + Ports)
+        |
+Infrastructure Adapters (Mongo, Redis, Kafka, Observability)
 ```
 
-### Hexagonal Architecture (Ports & Adapters)
+### 1) Entrypoint Layer
 
-The application uses ports and adapters to maintain independence from external frameworks:
+Main classes:
 
-- **Input Ports**: Define what use cases clients can invoke
-  - `PolicyUseCasePort`: Orchestrates policy-related operations
-  
-- **Output Ports**: Abstracts persistence and external services
-  - `PolicyRepositoryPort`: Policy data persistence
-  - `PolicyEventPublisher`: Event publishing to external systems
+- `entrypoint.rest.PolicyController`
+- `entrypoint.rest.InsurancePatrimonialController`
+- `entrypoint.rest.GlobalExceptionHandler`
 
-- **Adapters**: Implement the ports
-  - REST Controllers: Adapt HTTP requests to use cases
-  - Repository Implementations: Adapt to database operations
-  - Event Publisher Adapter: Adapts to event infrastructure
+Responsibilities:
 
-## Project Structure
+- HTTP contract handling
+- request validation and mapping
+- idempotency header usage for write operations
+- response shaping
 
-```
-src/main/java/com/itau/insurance/patrimonial/
-├── domain/                          # Domain Layer (Core Business Logic)
-│   ├── model/
-│   │   └── Policy.java              # Policy aggregate root
-│   ├── event/
-│   │   ├── DomainEvent.java         # Event interface
-│   │   ├── PolicyCreatedEvent.java   # Creation event
-│   │   ├── PolicyUpdatedEvent.java   # Update event
-│   │   └── PolicyDeletedEvent.java   # Deletion event
-│   ├── exception/
-│   │   ├── DomainException.java     # Base exception
-│   │   ├── PolicyNotFoundException.java
-│   │   ├── InvalidPolicyException.java
-│   │   └── IdempotencyKeyConflictException.java
-│   └── ports/
-│       ├── PolicyUseCasePort.java   # Input port (Use cases)
-│       └── PolicyRepositoryPort.java # Output port (Repository)
-├── application/                     # Application Layer (Use Cases & DTOs)
-│   ├── service/
-│   │   ├── PolicyApplicationService.java # Main use case orchestrator
-│   │   └── PolicyEventPublisher.java    # Event publisher port
-│   ├── dto/
-│   │   ├── PolicyRequestDTO.java    # Input DTO
-│   │   └── PolicyResponseDTO.java   # Output DTO
-│   ├── mapper/
-│   │   └── PolicyMapper.java        # MapStruct mapper
-│   └── adapter/
-│       └── PolicyEventPublisherAdapter.java # Event publisher impl
-├── entrypoint/                      # Adapter Layer (REST)
-│   └── rest/
-│       ├── PolicyController.java            # Main REST controller
-│       ├── InsurancePatrimonialController.java # Open Insurance API
-│       ├── GlobalExceptionHandler.java      # Exception handling
-│       └── dto/
-│           ├── InsuranceProductDTO.java     # Open Insurance DTO
-│           ├── OpenInsuranceResponseDTO.java # Open Insurance response
-│           └── ErrorResponseDTO.java         # Error response
-└── config/                          # Configuration
-    └── PatrimonialInsuranceConfig.java
-```
+### 2) Application Layer
 
-## Key Components
+Main classes:
 
-### 1. Domain Model (Policy)
-- Core business entity representing an insurance policy
-- Contains all business rules and validations
-- Encapsulates policy lifecycle (ACTIVE, SUSPENDED, CANCELLED, EXPIRED)
-- Provides domain methods: `validate()`, `cancel()`, `suspend()`, `reactivate()`, etc.
+- `application.service.PolicyApplicationService`
+- `application.service.PolicyEventPublisher` (port)
+- `application.adapter.PolicyEventPublisherAdapter` (outbox event creation)
+- DTOs/mappers in `application.dto` and `application.mapper`
 
-### 2. Domain Events
-Domain events capture important business occurrences:
-- **PolicyCreatedEvent**: Published when a policy is created
-- **PolicyUpdatedEvent**: Published when a policy is modified
-- **PolicyDeletedEvent**: Published when a policy is deleted
+Responsibilities:
 
-These events enable event-driven architecture and can be consumed by other bounded contexts.
+- orchestrate policy lifecycle use cases
+- call domain ports (persistence/event publishing)
+- enforce application-level flows and consistency
 
-### 3. Domain Ports
-- **PolicyUseCasePort**: Input port defining available use cases
-- **PolicyRepositoryPort**: Output port for data persistence
-- Ports are implementation-agnostic, allowing easy swapping of adapters
+### 3) Domain Layer
 
-### 4. Application Service
-`PolicyApplicationService` orchestrates use cases:
-- Implements `PolicyUseCasePort`
-- Manages transactions
-- Publishes domain events
-- Converts between DTOs and domain models
-- Provides consistent error handling
+Main classes:
 
-### 5. REST Controllers
-- **PolicyController**: CRUD operations for policies
-- **InsurancePatrimonialController**: Open Insurance API compliance
+- `domain.model.Policy`
+- `domain.event.*` (`PolicyCreatedEvent`, `PolicyUpdatedEvent`, `PolicyDeletedEvent`)
+- `domain.ports.*` (`PolicyUseCasePort`, `PolicyRepositoryPort`)
+- `domain.exception.*`
 
-### 6. Exception Handling
-Comprehensive exception hierarchy:
-- `DomainException`: Base exception for all domain errors
-- `PolicyNotFoundException`: Policy not found
-- `InvalidPolicyException`: Business rule violations
-- `IdempotencyKeyConflictException`: Duplicate operation prevention
+Responsibilities:
 
-## API Endpoints
+- business rules and invariants
+- domain events
+- abstractions (ports) that isolate the core from technology
 
-### Policy Management (v1)
+### 4) Infrastructure Layer
 
-#### Create Policy
-```
-POST /api/v1/policies
-Content-Type: application/json
-Idempotency-Key: optional-key-for-deduplication
+Main classes:
 
-{
-  "customerId": "CUST-001",
-  "coverage": "RESIDENTIAL",
-  "premium": 50000,
-  "startDate": "2024-01-01",
-  "endDate": "2025-01-01",
-  "propertyDescription": "2 bedroom apartment",
-  "propertyAddress": "Rua Principal, 123"
-}
-```
+- Persistence:
+  - `infrastructure.persistence.document.PolicyDocument`
+  - `infrastructure.persistence.repository.PolicyMongoRepository`
+  - `infrastructure.persistence.adapter.PolicyRepositoryAdapter`
+- Idempotency:
+  - `infrastructure.cache.IdempotencyService`
+  - `infrastructure.cache.IdempotencyRequest`
+- Messaging:
+  - `infrastructure.messaging.OutboxPublisher`
+  - `infrastructure.messaging.PolicyEventConsumer`
+  - `infrastructure.messaging.KafkaProducerService`
+  - `infrastructure.persistence.document.OutboxEventDocument`
+- Config/Observability:
+  - `infrastructure.config.*` (`MongoConfig`, `MongoTransactionConfig`, `KafkaConfig`, `RedisConfig`)
+  - `infrastructure.observability.*` (`CorrelationIdFilter`, `KafkaHealthIndicator`)
 
-#### Get Policy
-```
-GET /api/v1/policies/{policyId}
-```
+Responsibilities:
 
-#### Get Customer Policies
-```
-GET /api/v1/policies/customer/{customerId}
-```
+- implement ports
+- integrate with external systems (Mongo/Redis/Kafka)
+- operational concerns (health, logging, correlation IDs)
 
-#### Update Policy
-```
-PUT /api/v1/policies/{policyId}
-Content-Type: application/json
+## Hexagonal Architecture Mapping
 
-{
-  "customerId": "CUST-001",
-  "coverage": "RESIDENTIAL",
-  "premium": 55000,
-  "startDate": "2024-01-01",
-  "endDate": "2025-01-01",
-  "propertyDescription": "2 bedroom apartment",
-  "propertyAddress": "Rua Principal, 123"
-}
-```
+### Input Ports (use cases exposed by core)
 
-#### Update Premium
-```
-PUT /api/v1/policies/{policyId}/premium?newPremium=55000
-```
+- `domain.ports.PolicyUseCasePort`
 
-#### Cancel Policy
-```
-POST /api/v1/policies/{policyId}/cancel
-```
+### Output Ports (dependencies required by core)
 
-#### Suspend Policy
-```
-POST /api/v1/policies/{policyId}/suspend
-```
+- `domain.ports.PolicyRepositoryPort`
+- `application.service.PolicyEventPublisher`
 
-#### Reactivate Policy
-```
-POST /api/v1/policies/{policyId}/reactivate
-```
+### Adapters
 
-#### Delete Policy
-```
-DELETE /api/v1/policies/{policyId}?reason=Customer%20request
-```
+- Input adapters: REST controllers
+- Output adapters: Mongo repository adapter, outbox publisher adapter, Redis idempotency service, Kafka producer/consumer components
 
-### Open Insurance API
+## Event-Driven Design
 
-#### Get Products
-```
-GET /open-insurance/insurance/patrimonial/products
-```
+### Domain events emitted by write flows
 
-#### Get Product by ID
-```
-GET /open-insurance/insurance/patrimonial/products/{policyId}
-```
+- `POLICY_CREATED`
+- `POLICY_UPDATED`
+- `POLICY_DELETED`
 
-#### Health Check
-```
-GET /open-insurance/insurance/patrimonial/health
-```
+These are created in application/domain flow and persisted to outbox before publication.
 
-## Technology Stack
+### Kafka topics currently used
 
-- **Java 11+**: Programming language
-- **Spring Boot 2.7+**: Framework
-- **Spring Data JPA**: Data access
-- **MapStruct**: Object mapping
-- **Lombok**: Boilerplate reduction
-- **Jakarta Bean Validation**: Input validation
-- **SLF4J / Logback**: Logging
-- **Spring Transaction Management**: Transaction handling
+- `policy-events`
+- `domain-events`
 
-## Design Patterns Used
+Consumers:
 
-1. **Hexagonal Architecture (Ports & Adapters)**: Maintains independence from external frameworks
-2. **Clean Architecture**: Separation of concerns across layers
-3. **Repository Pattern**: Abstracts data access
-4. **Mapper Pattern**: Transforms between DTOs and domain models
-5. **Exception Handling Pattern**: Comprehensive exception hierarchy
-6. **Event Sourcing (Conceptual)**: Domain events capture business events
-7. **Dependency Injection**: Spring-managed dependencies
-8. **Service Layer Pattern**: Business logic encapsulation
+- `PolicyEventConsumer.consumePolicyEvent(...)`
+- `PolicyEventConsumer.consumeDomainEvent(...)`
 
-## How to Extend
+### Transactional Outbox Flow
 
-### Adding a New Use Case
-1. Add method to `PolicyUseCasePort` interface
-2. Implement in `PolicyApplicationService`
-3. Add controller method in appropriate REST controller
-4. Create domain event if needed
-5. Update mapper if DTOs are affected
+1. Write request arrives (e.g., create/update/delete policy).
+2. Business data is persisted in MongoDB.
+3. Event is persisted in `outbox_events` as `PENDING`.
+4. `OutboxPublisher` scheduled poll scans pending events.
+5. Publisher sends to Kafka.
+6. On success: event marked `PUBLISHED`.
+7. On failure: event is tracked and retried; after max retries it can remain `FAILED`.
 
-### Implementing Repository Port
-1. Create implementation of `PolicyRepositoryPort`
-2. Use `@Repository` annotation
-3. Use JPA/Spring Data for database operations
-4. Inject into `PolicyApplicationService`
+This provides reliable, decoupled publication with retry semantics (**at-least-once delivery**).
 
-### Publishing Events
-1. Extend `PolicyEventPublisher` implementation
-2. Integrate with message broker (RabbitMQ, Kafka, AWS SQS, etc.)
-3. Current implementation logs events (ready for enhancement)
+## Data Architecture
 
-## Error Handling
+### MongoDB collections
 
-The application provides comprehensive error responses:
+- `policies`
+- `outbox_events`
 
-```json
-{
-  "timestamp": "2024-01-15T10:30:00",
-  "status": 404,
-  "error": "Not Found",
-  "message": "Policy not found: policy-123",
-  "code": "POLICY_NOT_FOUND",
-  "path": "/api/v1/policies/policy-123"
-}
-```
+### Policy model highlights
 
-## Validation
+- primary key: `_id` (`@Id`)
+- unique/sparse indexes for `policy_number` and `idempotency_key`
+- additional indexes/compound indexes for customer/status/date access patterns
+- soft delete support (`deleted` flag)
 
-Input validation uses Jakarta Bean Validation annotations:
-- `@NotBlank`: Required non-empty strings
-- `@NotNull`: Required fields
-- `@Positive`: Positive numeric values
-- `@Size`: String length constraints
-- `@JsonFormat`: Date format specification
+### Redis usage
 
-## Idempotency
+- `Idempotency-Key` deduplication for write operations
+- prevents duplicate execution and returns cached prior result when applicable
 
-The API supports idempotent operations via `Idempotency-Key` header:
-- Prevents duplicate policy creation when same request is retried
-- Returns 409 Conflict if key already exists with different data
-- Recommended for critical operations
+## API Surface (current)
 
-## Logging
+### Policy CRUD + lifecycle
 
-The application uses SLF4J with Logback:
-- `@Slf4j` annotation on service and controller classes
-- INFO level for business operations
-- DEBUG level for detailed execution traces
-- WARN level for exceptional conditions
-- ERROR level for failures
+- `POST /api/v1/policies`
+- `GET /api/v1/policies/{policyId}`
+- `GET /api/v1/policies`
+- `PUT /api/v1/policies/{policyId}`
+- `DELETE /api/v1/policies/{policyId}`
+- `POST /api/v1/policies/{policyId}/cancel`
+- `POST /api/v1/policies/{policyId}/suspend`
+- `POST /api/v1/policies/{policyId}/reactivate`
+- `PUT /api/v1/policies/{policyId}/premium` (hidden/internal endpoint)
+- `GET /api/v1/policies/customer/{customerId}` (hidden/internal endpoint)
 
-## Future Enhancements
+### Open Insurance read endpoints
 
-1. **Repository Implementation**: Add JPA repository implementation
-2. **Event Bus Integration**: Integrate with RabbitMQ/Kafka for event publishing
-3. **Caching**: Add caching layer for frequently accessed policies
-4. **Audit Trail**: Track all policy changes
-5. **Approval Workflow**: Add policy approval process
-6. **Customer Integration**: Link policies to customer domain
-7. **Claims Management**: Add claim processing domain
-8. **Coverage Details**: Expand coverage types and details
-9. **Documentation**: Add Swagger/OpenAPI documentation
-10. **Integration Tests**: Add test layer
+- `GET /insurance-patrimonial`
+- `GET /insurance-patrimonial/{policyId}/policy-info`
+- `GET /insurance-patrimonial/{policyId}/premium`
+- `GET /insurance-patrimonial/{policyId}/claim`
 
-## References
+## Consistency and Reliability Strategy
 
-- [Clean Architecture by Robert C. Martin](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
-- [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
-- [Domain-Driven Design by Eric Evans](https://www.domainlanguage.com/ddd/)
-- [Spring Framework Documentation](https://spring.io/projects/spring-framework)
-- [Banco Central Open Insurance](https://www.bcb.gov.br/)
+- idempotent writes via Redis
+- retries for outbox publication
+- soft-delete semantics for policy records
+- correlation ID propagation in logs
+- health indicators for runtime dependencies
+
+## Why this architecture
+
+- **Maintainability**: core business logic isolated from frameworks
+- **Testability**: domain/application tests can mock output ports
+- **Replaceability**: persistence/messaging implementations can change with lower core impact
+- **Resilience**: outbox + async events reduce coupling and absorb transient failures
 
 ---
 
 **Version**: 1.0.0  
-**Last Updated**: 2024-01-15  
-**Author**: Copilot
+**Last Updated**: 2026-10-12
